@@ -1,141 +1,156 @@
-# deeplearning_agent
+# DeepLearning Agent
 
-## 环境变量与密钥
+基于 **LangGraph** 的深度研究型智能体：自动拆解主题、并发联网检索、结合向量记忆与可选文档上传，在多轮反思后生成结构化研究报告。仓库同时提供 **RAG 离线评测链路** 与 **FastAPI + Redis + Celery** 的任务化后端，适合从本地实验平滑过渡到服务部署。
 
-- `.env` 建议只放**非敏感默认配置**。
-- 真实密钥请放在 `.env.local`（本机私有，不共享）或系统环境变量中。
-- 变量优先级：**系统环境变量 > `.env.local` > `.env`**。
-- 可复制 `.env.example` 作为本地模板。
+---
 
-## 联网搜索（执行节点）
+## 项目能做什么
 
-默认使用 **Serper**（`https://serper.dev`，返回 Google 有机结果 JSON）。在项目根 `.env` 中设置：
+| 方向 | 说明 |
+|------|------|
+| **深度研究** | 规划 → 异步执行子任务（搜索 + 总结）→ 聚合 → 按需多轮深入 → 报告，适合调研、竞品分析、技术扫盲等长链路任务。 |
+| **记忆与 RAG** | ChromaDB 向量库 + 通义等嵌入；支持 HyDE / MQE 等查询增强；可上传 PDF 等文档参与检索。 |
+| **评测与可观测** | 检索指标（P@k、R@k、MRR、nDCG 等）、可选 **LangSmith** 追踪；便于迭代检索策略与提示词。 |
+| **工程化交付** | 异步任务 API、幂等与结果缓存、Docker 一键拉起 API + Worker + Redis。 |
 
-- `SEARCH_BACKEND=serper`（默认）
-- `SERPER_API_KEY=<你的 Key>`
+---
 
-仍可使用 **Tavily**：`SEARCH_BACKEND=tavily` 并设置 `TAVILY_API_KEY`。
+## 核心特点
 
-**注意**：`.env` 里**不要重复写同一变量**（如两行 `SERPER_API_KEY`）；python-dotenv 通常以**最后一次为准**，空行会覆盖前面的密钥。
+- **图式工作流**：状态在节点间显式流转，规划、执行、聚合、报告职责清晰，易于扩展新节点或策略。
+- **高并发 I/O**：子任务级异步执行，适合多查询并行检索与总结。
+- **搜索可插拔**：默认 **Serper**（Google 有机结果 JSON），可切换 **Tavily**；超时与重试可配置，适配不稳定网络。
+- **LLM 与嵌入**：默认对接阿里云 **DashScope** 兼容 OpenAI API（如 Qwen）；嵌入与模型名通过环境变量配置。
+- **RAG 评测工具链**：从建索引、`eval_retrieval`、金标候选生成到与 LangSmith 联动，覆盖实验到对比分析。
+- **后端 MVP**：`POST` 提交研究/评估任务，`GET` 轮询状态；可选 `X-API-Key` 鉴权；附压测脚本。
 
-若出现 **`Server disconnected`**（网络不稳、跨境延迟）：可加大 `SEARCH_HTTP_TIMEOUT_S`（默认 60）与 `SEARCH_HTTP_RETRIES`（默认 3），例如 `SEARCH_HTTP_TIMEOUT_S=90`。
+---
 
-## LangSmith（RAG 效果测试 / 追踪）
+## 技术栈
 
-1. 在 `.env` 中设置 `LANGSMITH_API_KEY`（或 `LANGCHAIN_API_KEY`），可选 `LANGSMITH_PROJECT=rag-eval`。
-2. 安装：`pip install langsmith`（已列入 `requirements.txt`）。
-3. 上传 RAG 检索+回答到 LangSmith 供在线评测：
+Python 3.10+ · LangGraph · LangChain · FastAPI · Celery · Redis · ChromaDB · sentence-transformers（及可选 DashScope 嵌入）等。
 
-   `python -m src.evaluator.rag_eval_runner eval_langsmith`
+---
 
-4. 深度研究脚本可选开启追踪：设 `LANGSMITH_TRACE_RESEARCH=true` 后运行 `python run_research.py ...`。
+## 快速开始
 
-详见 [`docs/langsmith.md`](docs/langsmith.md)。
+### 1. 环境
 
-## 后端服务化（FastAPI + Redis + Celery）
+```bash
+python -m venv venv
+# Windows: venv\Scripts\activate
+# Linux/macOS: source venv/bin/activate
 
-本仓库已提供后端 MVP：
+pip install -r requirements.txt
+pip install -e .
+```
 
-- API 服务：`python -m src.backend.main`
-- Celery Worker：`celery -A src.backend.celery_app.celery_app worker -l info --concurrency=2`
-- Redis：默认 `redis://localhost:6379`
+复制环境变量模板并按说明填写密钥（详见下方「配置说明」）：
 
-推荐一键启动（Docker）：
+```bash
+copy .env.example .env
+# 编辑 .env；敏感项建议使用 .env.local 或系统环境变量
+```
+
+变量优先级：**系统环境变量 > `.env.local` > `.env`**。
+
+### 2. 命令行跑一轮深度研究
+
+```bash
+python run_research.py "你的研究主题"
+# 可选：--upload 某.pdf 或目录，将文档纳入向量检索
+```
+
+### 3. Docker 启动 API + Worker + Redis
 
 ```bash
 docker compose up --build
 ```
 
-核心接口：
+默认暴露 **API `http://127.0.0.1:8000`**。核心接口示例：
 
 - `GET /health`
-- `POST /tasks/research`（提交研究任务）
-- `POST /tasks/eval`（提交评估任务）
-- `GET /tasks/{task_id}`（查询任务状态/结果）
+- `POST /tasks/research` — 提交研究任务  
+- `POST /tasks/eval` — 提交评估任务  
+- `GET /tasks/{task_id}` — 查询状态与结果  
 
-说明：
+---
 
-- 支持任务幂等与结果缓存（Redis，TTL 可配）。
-- 可用 `BACKEND_API_KEY` 启用简单 API Key 鉴权（请求头：`X-API-Key`）。
-- 压测脚本：`python scripts/load_test_tasks.py --url http://127.0.0.1:8000 --n 20 --c 5`
+## 配置说明（摘要）
 
-## 开发环境：`import src` 找不到？
+| 类别 | 要点 |
+|------|------|
+| **LLM** | `DASHSCOPE_API_KEY`、`QWEN_*`、`REPORT_*` 等（见 `.env.example`）。 |
+| **搜索** | `SEARCH_BACKEND=serper` 或 `tavily`；`SERPER_API_KEY` / `TAVILY_API_KEY`。勿在 `.env` 中重复同一键（后者会覆盖前者）。 |
+| **嵌入** | `EMBEDDING_PROVIDER`、`DASHSCOPE_EMBEDDING_MODEL` 等。 |
+| **检索增强** | `ENABLE_HYDE`、`ENABLE_MQE` 等。 |
+| **后端** | `REDIS_URL`、`CELERY_*`、`BACKEND_API_KEY`（可选）、报告目录与 TTL 等。 |
+| **LangSmith** | `LANGSMITH_API_KEY`、`LANGSMITH_PROJECT`；深度研究可选 `LANGSMITH_TRACE_RESEARCH=true`。 |
 
-直接运行子路径下的脚本（如 `python src/evaluator/rag_eval_runner.py`）时，若未把**项目根目录**加入 Python 路径，会出现 `ModuleNotFoundError: No module named 'src'`。
+联网搜索若出现 **`Server disconnected`**，可适当增大 `SEARCH_HTTP_TIMEOUT_S`、`SEARCH_HTTP_RETRIES`。
 
-**推荐（任选其一）：**
+---
 
-1. **可编辑安装（推荐，一次配置全局生效）**  
-   在项目根目录执行：
-   ```bash
-   .\venv\Scripts\pip install -e .
-   ```
-   之后从任意工作目录运行脚本，只要用的是该 venv，`import src` 均可用。
+## 常用开发命令
 
-2. **模块方式运行（无需安装）**  
-   ```bash
-   cd <项目根目录>
-   python -m src.evaluator.rag_eval_runner demo
-   ```
+```bash
+# 模块方式运行（避免 PYTHONPATH 问题）
+python -m src.evaluator.rag_eval_runner demo
 
-3. **VS Code / Cursor**  
-   已提供 `.vscode/settings.json`，为终端注入 `PYTHONPATH=项目根`（需用工作区打开项目根）。
+# RAG：上传 LangSmith 评测（需配置 LangSmith）
+python -m src.evaluator.rag_eval_runner eval_langsmith
 
-## RAG 离线评估卡住？
+# 后端本地（需本机 Redis）
+python -m src.backend.main
+celery -A src.backend.celery_app.celery_app worker -l info --concurrency=2
 
-`eval_retrieval` 默认对每条 query 跑 **baseline + HyDE + MQE**（后两者各需 LLM），10 条可能要 **数十分钟**，且首条就会等较久。
-
-- 运行中会打印 **`[RAG-EVAL] 进度 i/N`**；若长时间无输出，多半是首条在等待 LLM。
-- **只测向量、快速冒烟**（秒级）：
-  ```bat
-  set RAG_EVAL_MODES=baseline
-  python -m src.evaluator.rag_eval_runner eval_retrieval
-  ```
-  PowerShell：`$env:RAG_EVAL_MODES="baseline"; python -m src.evaluator.rag_eval_runner eval_retrieval`
-
-### HyDE / MQE 总超时、回退 baseline？
-
-- 默认已将 **HTTP 读超时** 与 **asyncio 外层等待** 调高（`ENHANCER_QWEN_TIMEOUT` 默认 **300s**；外层默认约 **max(480, HTTP+120)**）。
-- 若仍 `Request timed out`，可在 `.env` 或终端继续加大（**外层须大于 HTTP**），例如：
-
-```bat
-set ENHANCER_QWEN_TIMEOUT=600
-set RAG_EVAL_ENHANCE_TIMEOUT_S=900
+# 压测（示例）
+python scripts/load_test_tasks.py --url http://127.0.0.1:8000 --n 20 --c 5
 ```
 
-仅评估链路单独加大 HTTP：设 `RAG_EVAL_LLM_HTTP_TIMEOUT_S=600`。跑 `eval_retrieval` 时会打印当前生效的秒数。
+若直接运行子路径脚本报 `No module named 'src'`，请使用 **`pip install -e .`** 或 **`python -m ...`**，或在本机配置 `PYTHONPATH` 指向项目根（仓库内可提供 VS Code/Cursor 工作区设置）。
 
-### 离线评估 P/R/MRR 全是 0？
+---
 
-多为 **`data/rag_eval_queries.jsonl` 里的 `relevant_ids` 与当前向量库不一致**（重建 `build_index` 后 chunk UUID 会变，旧 id 全部失效）。运行 `eval_retrieval` 时会自动校验并打印警告。
+## 文档索引
 
-**一键对齐当前库（弱监督口径，会备份原文件为 `rag_eval_queries.jsonl.bak`）：**
+| 文档 | 内容 |
+|------|------|
+| [docs/langsmith.md](docs/langsmith.md) | LangSmith 与 RAG 评测上传 |
+| [docs/rag_manual_gold_labeling.md](docs/rag_manual_gold_labeling.md) | 人工金标、候选池、评测口径与避坑 |
+| [docs/backend_upgrade_mvp.md](docs/backend_upgrade_mvp.md) | 后端 MVP 相关说明 |
 
-```bat
-python -m src.evaluator.rag_eval_runner refresh_eval_ids_union
+RAG 离线评估较慢时，可设 `RAG_EVAL_MODES=baseline` 做快速冒烟；金标 ID 与向量库不一致时见评测脚本说明与 `refresh_eval_ids_union` 等命令（详见 `docs/rag_manual_gold_labeling.md`）。
+
+---
+
+## 仓库结构（节选）
+
+```
+src/
+  graph.py              # LangGraph 主流程
+  state.py              # 图状态
+  nodes/                # 规划、执行、聚合、报告等节点
+  memory/               # 向量记忆、嵌入、查询增强
+  tools/                # LLM、异步搜索等
+  backend/              # FastAPI、Celery、Redis 存储
+  evaluator/            # RAG 评测与索引构建入口
+run_research.py         # 命令行深度研究入口
+scripts/                # 压测、数据与标注辅助脚本
 ```
 
-说明：
-- 已彻底移除 `refresh_eval_ids`（过去容易被误解为 baseline Top‑k 回写，导致评测结论偏置）。
-- `refresh_eval_ids_union` 会回写为 **baseline/HyDE/MQE 三路候选 Top‑k 的去重并集**（k 由 `RAG_EVAL_GOLD_CANDIDATES_K` 控制，默认 5），适合做难例分析与快速迭代。
-- 若要严肃对比，请使用 **gold_pool + 人工标注** 或 URL/文档级金标（见下文）。
+---
 
-`data/rag_eval_queries.jsonl` 的路径**固定相对项目根目录**解析（与当前终端在哪个文件夹无关）。
+## 测试
 
-评估输出除 **P@k / R@k / MRR** 外还有 **nDCG@k**（二元相关：命中金标 chunk 或 URL 则该 rank 上 rel=1），用于看排序质量；若金标为 baseline Top-k，nDCG 同样会偏向 baseline。
+```bash
+pytest
+```
 
-手动标注仍可用：`search_chunks "关键词"` 查当前 id 后写入 jsonl。
+---
 
-**人工金标注完整流程（步骤、规范、质检、避坑）**：见 [`docs/rag_manual_gold_labeling.md`](docs/rag_manual_gold_labeling.md)。
+## 致谢
 
-**开始一轮人工金标**：在仓库根目录执行  
-`python -m src.evaluator.rag_eval_runner gold_candidates`  
-查看每条 query 的候选 chunk 与当前 `relevant_ids`，再编辑 jsonl 并跑 `eval_retrieval`。
+构建于 LangGraph、LangChain 与开源向量库生态；搜索与模型服务依赖第三方 API，使用前请遵守相应服务条款与配额。
 
-**不要只从 baseline 的 Top-k 里勾选金标**（会低估 HyDE/MQE 等召回改进）。更宽候选池：`python -m src.evaluator.rag_eval_runner gold_pool`（baseline+HyDE+MQE 去重合并，需 LLM）。详见 [`docs/rag_manual_gold_labeling.md`](docs/rag_manual_gold_labeling.md)「方法学」。
-
-`gold_candidates` / `search_chunks` 里的 **preview 默认只显示前 220 字**（可调 `RAG_EVAL_GOLD_PREVIEW_CHARS`），**完整正文在向量库里**。**url** 若显示 N/A：多为旧索引未写入每块 URL；从带 `SourceURL:` 的清洗文本重建索引后，同一文件的 chunk 会带上来源 URL（见 `docs/rag_manual_gold_labeling.md` 说明）。
-
-若预览里仍有 **「复制页面」、HTML 碎片** 等：语料来自网页抓取，旧版清洗较弱；已在 `build_index` 中加强去导航/去 UI 文案。**需重新 `python -m src.evaluator.rag_eval_runner build_index`** 后 chunk 才会变干净。
-
-金标时：**`gold_candidates` 会打印 jsonl 里的 `gold_answer` 作题意对照**；看某 chunk 全文用 `python -m src.evaluator.rag_eval_runner dump_chunk <uuid>`。检索 Top-k 只是候选，噪声进上下文会干扰 LLM——产品上需 **重排 / 减小 k / 过滤**，与「检索评估」测的是两回事。
+若本项目对你有帮助，欢迎 Star 与 Issue/PR。
