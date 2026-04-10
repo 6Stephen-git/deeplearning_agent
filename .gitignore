@@ -1,0 +1,88 @@
+.env.local
+reports/
+data/
+__pycache__/
+.pytest_cache/
+# ================================
+# Python
+# ================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 虚拟环境
+venv/
+ENV/
+env/
+.venv/
+
+# ================================
+# 深度学习特定文件
+# ================================
+# 模型文件
+*.pth
+*.pt
+*.h5
+*.hdf5
+*.bin
+*.onnx
+*.pkl
+*.pickle
+*.joblib
+
+# 数据集（如果很大，应该忽略）
+data/
+dataset/
+*.npy
+*.npz
+*.csv
+*.tsv
+*.jsonl
+*.hdf5
+*.h5
+*.feather
+*.parquet
+
+# 训练日志
+logs/
+runs/
+*.log
+tensorboard/
+wandb/
+mlruns/
+
+# 检查点
+checkpoints/
+*.ckpt
+
+# ================================
+# IDE
+# ================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ================================
+# 系统
+# ================================
+.DS_Store
+Thumbs.db
