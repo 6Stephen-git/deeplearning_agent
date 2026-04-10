@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deeplearning-agent"
+version = "0.1.0"
+description = "Deep learning / research agent (LangGraph)"
+requires-python = ">=3.10"
+readme = "README.md"
+
+# 依赖由项目自行维护（requirements / venv）；此处不强制锁版本，避免与现有环境冲突
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
