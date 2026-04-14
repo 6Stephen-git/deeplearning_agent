@@ -1,5 +1,10 @@
 version: "3.9"
 
+SEARCH_BACKEND=${SEARCH_BACKEND:-serper}
+SERPER_API_KEY=${SERPER_API_KEY}
+DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
+LANGSMITH_API_KEY=${LANGSMITH_API_KEY}
+
 services:
   redis:
     image: redis:7-alpine
